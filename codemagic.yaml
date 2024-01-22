@@ -1,142 +1,22 @@
-# Copyright (c) 2022 Sharezone UG (haftungsbeschränkt)
-# Licensed under the EUPL-1.2-or-later.
-#
-# You may obtain a copy of the Licence at:
-# https://joinup.ec.europa.eu/software/page/eupl
-#
-# SPDX-License-Identifier: EUPL-1.2
-
-# We are using Codemagic beside GitHub Actions for our mobile CI/CD.
-#
-# The "codemagic.yaml" allows us to configure workflows without using the
-# UI-Editor. This has the advantage that changes are tracked in Git.
-#
-# You find the documentation about the codemagic.yaml here:
-# https://docs.codemagic.io/yaml/yaml-getting-started/
-
-# With "definitions" we are able to reuse code. Therefore, we can a script once
-# and use reuse this script in other workflows without duplicating it. Just
-# define a section with &NAME and use it with *NAME.
-#
-# Docs for definitions:
-# https://docs.codemagic.io/yaml/yaml-getting-started/#reusing-sections
-#
-# Sample by Codemagic:
-# https://github.com/codemagic-ci-cd/codemagic-sample-projects/blob/main/yaml/yaml_anchors_aliases_sample/codemagic.yaml
-
 workflows:
-  app-preview:
-    name: App Preview
-    max_build_duration: 75
-    environment:
-      xcode: 14.3
-      groups:
-        - github
-        - ios-publishing
-        - android_publishing
-        - certificate_credentials
-        - codemagic
-      vars:
-        BUNDLE_ID: de.codingbrain.sharezone.app.dev
-      # Sets the Flutter version to the version from fvm_config.json.
-      flutter: fvm
-    working_directory: app
-    scripts:
-      - name: iOS code signing
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_ADHOC --create
-          keychain add-certificates
-          xcode-project use-profiles
-      - name: Set up key properties (Android)
-        script: |
-          echo $FCI_KEYSTORE | base64 --decode > android/app/key.jks
-          cat >> "android/key.properties" <<EOF
-          storePassword=$FCI_KEYSTORE_PASSWORD
-          keyPassword=$FCI_KEY_PASSWORD
-          keyAlias=$FCI_KEY_ALIAS
-          storeFile=key.jks
-          EOF
-      - name: Install dependencies
-        script: flutter pub get
-      - name: Build APK
-        script: |
-          flutter build apk \
-            --flavor dev \
-            --target lib/main_dev.dart
-      - name: Build IPA
-        script: |
-          flutter build ipa \
-            --export-options-plist=/Users/builder/export_options.plist \
-            --flavor dev \
-            --target lib/main_dev.dart
-    artifacts:
-      - build/**/outputs/apk/**/*.apk
-      - build/ios/ipa/*.ipa
-    publishing:
-      scripts:
-        - name: Post App Preview
-          script: |
-            dart pub global activate codemagic_app_preview 0.2.1
-            app_preview post \
-              --github_token $GITHUB_PAT \
-              --codemagic_token $CODEMAGIC_TOKEN \
-              --message "_Note_: Only Sharezone team members are able to install the iOS app."
-
-  # Due to https://github.com/flutter/flutter/issues/111739 we need to use
-  # Codemagic for running our golden tests. We use M1/M2 Macs to generate and
-  # run our golden tests.
-  test-only-goldens:
-    name: test-only-goldens
+  dcm-analysis:
+    name: DCM avoid-unrelated-type-assertions
     max_build_duration: 15
     instance_type: mac_mini_m1
     environment:
       # Sets the Flutter version to the version from fvm_config.json.
       flutter: fvm
-    when:
-      # To save Codemagic usage we only run the tests for non draft PRs
-      condition: not event.pull_request.draft
-      changeset:
-        includes:
-          - ".fvm/fvm_config.json"
-          - "app/**"
-          - "lib/**"
-          # We trigger also this workflow, if this workflow is changed, so that
-          # new changes will be applied.
-          - "codemagic.yaml"
-        excludes:
-          - "**/*.md"
-          - "**/*.mdx"
-          - "**/.gitignore"
-          - "**/firebase.json"
-          - "**/.firebaserc"
-    triggering:
-      events:
-        - pull_request
-      cancel_previous_builds: true
+      groups:
+        - dcm_key
     scripts:
-      - name: Activate sz_repo_cli package
+      - name: install dcm on codemagic
         script: |
-          flutter pub global activate --source path "$(pwd)/tools/sz_repo_cli/"
-          echo PATH="$(pwd)/bin:$PATH" >> $CM_ENV
-      - name: Run Tests
+          brew tap CQLabs/dcm
+          brew install dcm
+      - name: Install flutter packages
+        script: flutter pub get
+      - name: Run DCM Analysis with License key
         script: |
-          sz test \
-            -c 4 \
-            --package-timeout-minutes 15 \
-            --only-goldens
-
-          # Upload results of failed golden tests if test command failed.
-          if [ $? -ne 0 ]; then
-            # Finds all "failures" folders and copies them to the export
-            # directory. Therefore, we are able to view the results of the
-            # failed golden tests.
-            #
-            # The command will use the exit code 0 (success) even when there are
-            # no failures folders.
-            find * -path '**/failures' -execdir bash -c "cp -r failures $FCI_EXPORT_DIR" \;
-            
-            # Because we caught the exit code of the test command, we need to
-            # set manually again.
-            exit 1
-          fi
+          mkdir -p dcm-results
+          dcm analyze --ci-key=$DCM_KEY --email=$DCM_EMAIL_ID lib --json-path=$CM_BUILD_DIR/app/dcm-results/dcm.json
+          test_report: app/dcm-results/dcm.json
