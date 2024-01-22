@@ -20,5 +20,4 @@ workflows:
         script: |
           cd app
           mkdir -p dcm-results
-          dcm analyze --ci-key=$DCM_KEY --email=$DCM_EMAIL_ID lib --reporter=json --json-path=$CM_BUILD_DIR/app/dcm-results/dcm.json
-        test_report: app/dcm-results/dcm.json
+          dcm analyze --ci-key=$DCM_KEY --email=$DCM_EMAIL_ID lib --reporter=console
