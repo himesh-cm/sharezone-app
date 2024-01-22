@@ -14,7 +14,7 @@ workflows:
           brew tap CQLabs/dcm
           brew install dcm
       - name: Install flutter packages
-        script: flutter pub get
+        script: cd app && flutter pub get
       - name: Run DCM Analysis with License key
         script: |
           mkdir -p dcm-results
