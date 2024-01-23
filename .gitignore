@@ -20,3 +20,4 @@ coverage/
 app/dcm_report.sh
 app/dcm_test.json
 app/dcm.json
+app/codemagic-sharezone.keystore

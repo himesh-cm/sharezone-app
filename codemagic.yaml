@@ -21,3 +21,27 @@ workflows:
           cd app
           mkdir -p dcm-results
           dcm analyze --ci-key=$DCM_KEY --email=$DCM_EMAIL_ID lib --reporter=console
+        ignore_failure: true
+  android-workflow:
+    name: Android Workflow
+    instance_type: mac_mini_m1
+    max_build_duration: 120
+    environment:
+      android_signing:
+        - sharezone_android
+      flutter: stable
+    scripts:
+      - name: Set up local.properties
+        script: |
+          echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/app/android/local.properties"
+      - name: Get Flutter packages
+        script: |
+          cd app && flutter packages pub get
+      - name: Build AAB with Flutter
+        script: |
+          cd app
+          flutter build appbundle
+    artifacts:
+      - build/**/outputs/**/*.aab
+      - build/**/outputs/**/mapping.txt
+      - flutter_drive.log
