@@ -40,10 +40,11 @@ workflows:
       - name: Build AAB with Flutter
         script: |
           cd app
-          flutter build apk \
+          flutter build appbundle \
           --flavor dev \
           --target lib/main_dev.dart
     artifacts:
       - build/**/outputs/**/*.aab
+      - build/**/outputs/**/*.apk
       - build/**/outputs/**/mapping.txt
       - flutter_drive.log
